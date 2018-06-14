@@ -317,6 +317,7 @@ def scan_txt():
 def printHelp(message=None):
     PARSER.print_help()
     if message:
+        print message
         log.error(message)
     sys.exit(1)
 
