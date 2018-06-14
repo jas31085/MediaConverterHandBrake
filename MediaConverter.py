@@ -26,7 +26,7 @@ RESOLUTIONS = {
     "SHD": {'X': 3840, 'Y': 2160},
     "4K": {'X': 4096, 'Y': 2160}
 }
-EXCLUDED_EXT = [".part"]
+EXCLUDED_EXT = ['.part']
 
 SRC_DIR   = None
 TMP_DIR   = None
@@ -375,7 +375,7 @@ def args_extraction(argv):
                                                                                                                                                  The value is one of:
                                                                                                                                                  480, 576, 720, 1080, 2K, WQXGA, SHD, 4K
                                                                                                                                                  ''')
-    v_group.add_argument('-l', '--language',     action = "append", default = None,   dest = "LANG",      type = str,   required = False, help = '''
+    v_group.add_argument('-l', '--language', action="append", default=None, dest="LANG", type=str, required=False, help='''
                                                                                                                                                  List of language needed in the file for start the conversion
                                                                                                                                                  ''')
 
