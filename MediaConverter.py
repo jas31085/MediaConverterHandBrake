@@ -1,19 +1,19 @@
 #!/bin/env python
 
-import os
-import sys
-import magic
 import getopt
-import subprocess
 import logging as log
+import os
+import subprocess
+import sys
+from distutils.spawn import find_executable
+from shutil import copyfile
+
+import magic
 import transmissionrpc as trpc
 
-from shutil import copyfile
-from distutils.spawn import find_executable
-
 LOG_LEVEL = log.DEBUG
-#HANDBRAKE_PATH = "/usr/bin/HandBrakeCLI"
-HANDBRAKE_PATH = "/bin/echo"
+HANDBRAKE_PATH = "/usr/bin/HandBrakeCLI"
+# HANDBRAKE_PATH = "/bin/echo"
 
 RESOLUTIONS = {
     "480"   : { 'X': 720,  'Y': 480  },
@@ -25,6 +25,7 @@ RESOLUTIONS = {
     "SHD"   : { 'X': 3840, 'Y': 2160 },
     "4K"    : { 'X': 4096, 'Y': 2160 }
 }
+
 EXCLUDED_EXTENSIONS = [ ".part" ]
 
 SRC_DIR   = None
