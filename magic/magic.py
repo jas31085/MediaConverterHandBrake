@@ -5,7 +5,7 @@ See README for more information.
 
 Usage:
 
->>> from Magic import magic
+>>> import magic
 >>> magic.from_file("testdata/test.pdf")
 'PDF document, version 1.2'
 >>> magic.from_file("testdata/test.pdf", mime=True)
@@ -114,6 +114,7 @@ class Magic:
             magic_close(self.cookie)
             self.cookie = None
 
+
 _instances = {}
 
 
@@ -184,12 +185,14 @@ if not libmagic or not libmagic._name:
 
 magic_t = ctypes.c_void_p
 
+
 def errorcheck_null(result, func, args):
     if result is None:
         err = magic_error(args[0])
         raise MagicException(err)
     else:
         return result
+
 
 def errorcheck_negative_one(result, func, args):
     if result is -1:
@@ -207,6 +210,7 @@ def maybe_decode(s):
     else:
         return s.decode('utf-8')
 
+
 def coerce_filename(filename):
     if filename is None:
         return None
@@ -223,6 +227,7 @@ def coerce_filename(filename):
         return filename.encode('utf-8', 'surrogateescape')
     else:
         return filename
+
 
 magic_open = libmagic.magic_open
 magic_open.restype = magic_t
@@ -245,13 +250,16 @@ _magic_file.restype = c_char_p
 _magic_file.argtypes = [magic_t, c_char_p]
 _magic_file.errcheck = errorcheck_null
 
+
 def magic_file(cookie, filename):
     return _magic_file(cookie, coerce_filename(filename))
+
 
 _magic_buffer = libmagic.magic_buffer
 _magic_buffer.restype = c_char_p
 _magic_buffer.argtypes = [magic_t, c_void_p, c_size_t]
 _magic_buffer.errcheck = errorcheck_null
+
 
 def magic_buffer(cookie, buf):
     return _magic_buffer(cookie, buf, len(buf))
@@ -262,8 +270,10 @@ _magic_load.restype = c_int
 _magic_load.argtypes = [magic_t, c_char_p]
 _magic_load.errcheck = errorcheck_negative_one
 
+
 def magic_load(cookie, filename):
     return _magic_load(cookie, coerce_filename(filename))
+
 
 magic_setflags = libmagic.magic_setflags
 magic_setflags.restype = c_int
@@ -276,7 +286,6 @@ magic_check.argtypes = [magic_t, c_char_p]
 magic_compile = libmagic.magic_compile
 magic_compile.restype = c_int
 magic_compile.argtypes = [magic_t, c_char_p]
-
 
 
 MAGIC_NONE = 0x000000 # No flags
