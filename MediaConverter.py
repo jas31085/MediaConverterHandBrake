@@ -407,7 +407,7 @@ def args_extraction(argv):
                                                                                                                                                 The value is one of:
                                                                                                                                                 480, 576, 720, 1080, 2K, WQXGA, SHD, 4K
                                                                                                                                                 ''')
-    v_group.add_argument('-l', '--language',    action = "append", default = None,   dest = "LANG",      type = str,   required = False, metavar='Language', nargs='+', help = '''
+    v_group.add_argument('-l', '--language',    action = "store",  default = None,   dest = "LANG",      type = str,   required = False, metavar='Language', nargs='+', help = '''
                                                                                                                                                 List of language needed in the file for start the conversion
                                                                                                                                                 ''')
 
@@ -477,7 +477,7 @@ def main(argv):
     log.basicConfig(level=LOG_LEVEL)
 
     if LANG:
-        LANG = [x.lower().strip for x in LANG]
+        LANG = [x.lower().strip() for x in LANG]
 
     if FILE_PATH:
         fileList = scan_file()
