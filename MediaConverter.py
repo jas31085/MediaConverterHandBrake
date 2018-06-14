@@ -14,19 +14,19 @@ from distutils.spawn import find_executable
 
 LOG_LEVEL = log.INFO
 # HANDBRAKE_PATH = "/usr/bin/HandBrakeCLI"
-HANDBRAKE_PATH = "/bin/echo" # Just for testing..
+HANDBRAKE_PATH = "/bin/echo"  # Just for testing..
 
 RESOLUTIONS = {
-    "480": {'X': 720, 'Y': 480},
-    "576": {'X': 720, 'Y': 576},
-    "720": {'X': 1280, 'Y': 720},
-    "1080": {'X': 1920, 'Y': 1080},
-    "2K": {'X': 2048, 'Y': 1080},
-    "WQXGA": {'X': 2560, 'Y': 1600},
-    "SHD": {'X': 3840, 'Y': 2160},
-    "4K": {'X': 4096, 'Y': 2160}
+    "480":   { 'X': 720,  'Y': 480  },
+    "576":   { 'X': 720,  'Y': 576  },
+    "720":   { 'X': 1280, 'Y': 720  },
+    "1080":  { 'X': 1920, 'Y': 1080 },
+    "2K":    { 'X': 2048, 'Y': 1080 },
+    "WQXGA": { 'X': 2560, 'Y': 1600 },
+    "SHD":   { 'X': 3840, 'Y': 2160 },
+    "4K":    { 'X': 4096, 'Y': 2160 }
 }
-EXCLUDED_EXT = ['.part']
+EXCLUDED_EXT = [ '.part' ]
 
 SRC_DIR   = None
 TMP_DIR   = None
@@ -178,7 +178,7 @@ def video_transcoder(inPath, outPath, res, ext):
     return process.returncode
 
 
-def copy_transcode(src_file):
+def copy_transcode(src_file, torrentID=None):
     this_inpDir = ''
     this_outDir = ''
     resolution = MAX_RES
@@ -187,7 +187,7 @@ def copy_transcode(src_file):
     in_extension = in_extension.lstrip('.').lower()
 
     out_fileName = '%s.%s'
-    out_extension = [ OUT_EXT if OUT_EXT else in_extension ]
+    out_extension = OUT_EXT if OUT_EXT else in_extension
 
     if TMP_DIR and DST_DIR:            # Case A
         this_inpDir = TMP_DIR
@@ -220,6 +220,7 @@ def copy_transcode(src_file):
 
         if DEL_SRC:
             os.remove(src_file)
+            if torrentID: remove_torrent(torrentID)
 
         # TODO: Output FileName personalization
         # if FILENAME:
@@ -257,20 +258,20 @@ def lang_exists(fileLang):
     return False
 
 
-def get_completed_downloads(host, port, usr, psw):
+def get_completed_downloads():
     retList = []
     maskFileList = []
     trasmissionFiles = []
 
-    torrents = trpc.Client(host, port, usr, psw).get_torrents()
+    torrents = trpc.Client(T_HOST, T_PORT, T_USER, T_PSW).get_torrents()
     for torrent in torrents:
         if torrent.status == 'stopped' and torrent.progress == 100:
             for key, value in dict(torrent.files()).iteritems():
                 if convert_bytes(value['size']) >= MAX_SIZE:
                     if MASK_DIR:
-                        trasmissionFiles.append([torrent._fields['downloadDir'].value, value['name']])
-                    elif is_video_file([torrent._fields['downloadDir'].value, value['name']]):
-                        retList.append([torrent._fields['downloadDir'].value, value['name']])
+                        trasmissionFiles.append( [ torrent._fields['downloadDir'].value, value['name'], torrent._fields['id'].value] )
+                    elif is_video_file( [torrent._fields['downloadDir'].value, value['name']] ):
+                        retList.append( [ torrent._fields['downloadDir'].value, value['name'], torrent._fields['id'].value ] )
 
     if MASK_DIR:
         for path, subdirs, files in os.walk(MASK_DIR):
@@ -281,10 +282,14 @@ def get_completed_downloads(host, port, usr, psw):
         for transmissionFile in trasmissionFiles:
             for maskFile in maskFileList:
                 if transmissionFile[1] in maskFile:
-                    retList.append(maskFile)
+                    retList.append( [ maskFile[0], maskFile[1], transmissionFile[2] ] )
                     break
 
     return retList
+
+
+def remove_torrent(torrentID):
+    trpc.Client(T_HOST, T_PORT, T_USER, T_PSW).remove_torrent(torrentID, True)
 
 
 def scan_file():
@@ -310,14 +315,14 @@ def scan_txt():
 
 
 def scan_torrents(fileList):
-    completeDownloads = get_completed_downloads(T_HOST, T_PORT, T_USER, T_PSW)
+    completeDownloads = get_completed_downloads()
 
     if SRC_DIR:
         for download in completeDownloads:
             if download[0] != SRC_DIR:
                 fileList.append(download)
     else:
-        fileList = completeDownloads
+        fileList += completeDownloads
 
     log.info('Found %d completed files on Transmission' % len(fileList))
 
@@ -381,35 +386,35 @@ def args_extraction(argv):
     t_group = PARSER.add_argument_group('Transmission')
     v_group = PARSER.add_argument_group('Video')
 
-    PARSER.add_argument(       '--filename',    action = "store",  default = None,   dest = "FILENAME",  type = str,   required = False, help = 'Set new output FileName')
-    PARSER.add_argument(       '--debug',       action = "store",  default = False,  dest = "DEBUG",     type = bool,  required = False, help = 'Set log level to Debug')
-    g_group.add_argument('-D', '--delete',      action = "store",  default = False,  dest = "DEL_SRC",   type = bool,  required = False, help = 'Delete Source file')
-    g_group.add_argument('-s', '--source',      action = "store",  default = None,   dest = "SRC_DIR",   type = str,   required = False, help = 'Source path used for scan')
-    g_group.add_argument('-t', '--tmp',         action = "store",  default = None,   dest = "TMP_DIR",   type = str,   required = False, help = 'Temporary folder')
-    g_group.add_argument('-d', '--destination', action = "store",  default = None,   dest = "DST_DIR",   type = str,   required = False, help = '''
-                                                                                                                                                Destination folder for converted items.
-                                                                                                                                                If not specified source and destination are the same
-                                                                                                                                                ''')
-    t_group.add_argument('-m', '--mask',        action = "store",  default = None,   dest = "MASK_DIR",  type = str,   required = False, help = '''
-                                                                                                                                                Used if you are running this script outside of Transmission
-                                                                                                                                                This is the local raggiungible path for Transmission downloads
-                                                                                                                                                ''')
-    g_group.add_argument('-T', '--txt',         action = "store",  default = None,   dest = "TXT_PATH",  type = str,   required = False, help = 'List of files in a *.txt list')
-    g_group.add_argument('-f', '--file',        action = "store",  default = None,   dest = "FILE_PATH", type = str,   required = False, help = 'One shot execution for a single file')
-    v_group.add_argument('-e', '--extension',   action = "store",  default = None,   dest = "OUT_EXT",   type = str,   required = False, help = 'Extension for output transcoded file')
-    t_group.add_argument(      '--host',        action = "store",  default = None,   dest = "T_HOST",    type = str,   required = False, help = 'Transmission host address')
-    t_group.add_argument(      '--port',        action = "store",  default = 9091,   dest = "T_PORT",    type = int,   required = False, help = 'Transmission host port (default=9091)')
-    t_group.add_argument(      '--user',        action = "store",  default = None,   dest = "T_USER",    type = str,   required = False, help = 'Transmission username')
-    t_group.add_argument(      '--psw',         action = "store",  default = None,   dest = "T_PSW",     type = str,   required = False, help = 'Transmission password')
-    v_group.add_argument('-S', '--size',        action = "store",  default = 1200.0, dest = "MAX_SIZE",  type = float, required = False, help = 'The minimum file size limit for conversion')
-    v_group.add_argument('-r', '--resolution',  action = "store",  default = '720',  dest = "MAX_RES",   type = str,   required = False, help = '''
-                                                                                                                                                Resolution for output transcoded file.
-                                                                                                                                                The value is one of:
-                                                                                                                                                480, 576, 720, 1080, 2K, WQXGA, SHD, 4K
-                                                                                                                                                ''')
-    v_group.add_argument('-l', '--language',    action = "store",  default = None,   dest = "LANG",      type = str,   required = False, metavar='Language', nargs='+', help = '''
-                                                                                                                                                List of language needed in the file for start the conversion
-                                                                                                                                                ''')
+    PARSER.add_argument(       '--filename',    action = "store",      default = None,   dest = "FILENAME",  type = str,   required = False, metavar='Filename',   help = 'Set new output FileName')
+    PARSER.add_argument(       '--debug',       action = "store_true", default = False,  dest = "DEBUG",                   required = False,                       help = 'Set log level to Debug')
+    g_group.add_argument('-D', '--delete',      action = "store_true", default = False,  dest = "DEL_SRC",                 required = False,                       help = 'Delete Source file')
+    g_group.add_argument('-s', '--source',      action = "store",      default = None,   dest = "SRC_DIR",   type = str,   required = False, metavar='SourcePath', help = 'Source path used for scan')
+    g_group.add_argument('-t', '--tmp',         action = "store",      default = None,   dest = "TMP_DIR",   type = str,   required = False, metavar='TempPath',   help = 'Temporary folder')
+    g_group.add_argument('-d', '--destination', action = "store",      default = None,   dest = "DST_DIR",   type = str,   required = False, metavar='DestPath',   help = '''
+                                                                                                                                                                          Destination folder for converted items.
+                                                                                                                                                                          If not specified source and destination are the same
+                                                                                                                                                                          ''')
+    t_group.add_argument('-m', '--mask',        action = "store",      default = None,   dest = "MASK_DIR",  type = str,   required = False, metavar='MaskPath',   help = '''
+                                                                                                                                                                          Used if you are running this script outside of Transmission
+                                                                                                                                                                          This is the local raggiungible path for Transmission downloads
+                                                                                                                                                                          ''')
+    g_group.add_argument('-T', '--txt',         action = "store",      default = None,   dest = "TXT_PATH",  type = str,   required = False, metavar='TextFile',   help = 'List of files in a *.txt list')
+    g_group.add_argument('-f', '--file',        action = "store",      default = None,   dest = "FILE_PATH", type = str,   required = False, metavar='SingleFile', help = 'One shot execution for a single file')
+    v_group.add_argument('-e', '--extension',   action = "store",      default = None,   dest = "OUT_EXT",   type = str,   required = False, metavar='Extension',  help = 'Extension for output transcoded file')
+    t_group.add_argument(      '--host',        action = "store",      default = None,   dest = "T_HOST",    type = str,   required = False, metavar='Host',       help = 'Transmission host address')
+    t_group.add_argument(      '--port',        action = "store",      default = 9091,   dest = "T_PORT",    type = int,   required = False, metavar='Port',       help = 'Transmission host port (default=9091)')
+    t_group.add_argument(      '--user',        action = "store",      default = None,   dest = "T_USER",    type = str,   required = False, metavar='User',       help = 'Transmission username')
+    t_group.add_argument(      '--psw',         action = "store",      default = None,   dest = "T_PSW",     type = str,   required = False, metavar='Password',   help = 'Transmission password')
+    v_group.add_argument('-S', '--size',        action = "store",      default = 1200.0, dest = "MAX_SIZE",  type = float, required = False, metavar='Size',       help = 'The minimum file size limit for conversion')
+    v_group.add_argument('-r', '--resolution',  action = "store",      default = '720',  dest = "MAX_RES",   type = str,   required = False, metavar='VideoRes',   help = '''
+                                                                                                                                                                          Resolution for output transcoded file.
+                                                                                                                                                                          The value is one of:
+                                                                                                                                                                          480, 576, 720, 1080, 2K, WQXGA, SHD, 4K
+                                                                                                                                                                          ''')
+    v_group.add_argument('-l', '--language',    action = "store",      default = None,   dest = "LANG",      type = str,   required = False, metavar='Language', nargs='+', help = '''
+                                                                                                                                                                      List of language needed in the file for start the conversion
+                                                                                                                                                                      ''')
 
     if not argv:
         log.error("No arguments provided")
@@ -517,7 +522,7 @@ def main(argv):
                 this_lang = get_video_lang(mediaInfo['Audio'])
 
             if lang_exists(this_lang):
-                copy_transcode(this_FullPath)
+                copy_transcode(this_FullPath, item[2] if len(item) == 3 else None)
 
 
 ########################################
