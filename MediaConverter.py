@@ -180,6 +180,7 @@ def video_transcoder(inPath, outPath, res, ext):
 
 def copy_transcode(src_file, torrentID=None):
     this_inpDir = ''
+    this_trnDir = ''
     this_outDir = ''
     resolution = MAX_RES
 
@@ -190,43 +191,47 @@ def copy_transcode(src_file, torrentID=None):
     out_extension = OUT_EXT if OUT_EXT else in_extension
 
     if TMP_DIR and DST_DIR:            # Case A
-        this_inpDir = TMP_DIR
+        this_inpDir = this_trnDir = TMP_DIR
         this_outDir = DST_DIR
 
     elif TMP_DIR and not DST_DIR:      # Case B
-        this_inpDir = TMP_DIR
+        this_inpDir = this_trnDir = TMP_DIR
         this_outDir = os.path.dirname(src_file)
 
     elif not TMP_DIR and DST_DIR:      # Case C
         this_inpDir = os.path.dirname(src_file)
-        this_outDir = DST_DIR
+        this_trnDir = this_outDir = DST_DIR
 
     elif not TMP_DIR and not DST_DIR:  # Case D
-        this_inpDir = this_outDir = os.path.dirname(src_file)
+        this_inpDir = this_trnDir = this_outDir = os.path.dirname(src_file)
 
     inputFile  = os.path.join(this_inpDir, '%s.%s' % (in_fileName,  in_extension))
-    outputFile = os.path.join(this_outDir, out_fileName % (in_fileName + '_transcoded', out_extension))
+    transFile  = os.path.join(this_trnDir, '%s.%s' % (in_fileName + '_transcoded', out_extension))
+
+    # TODO: Output FileName personalization
+    # if FILENAME:
+    #     out_fileName = out_fileName % ('???', out_extension)
+    #     outputFile = os.path.join(this_outDir, out_fileName)
+    # else:
+    outputFile = os.path.join(this_outDir, out_fileName % (in_fileName + '_transcoded' if not DST_DIR else in_fileName, out_extension))
 
     # The magic begins..
     if TMP_DIR:
         copyfile(src_file, TMP_DIR)
 
-    retCode = video_transcoder(inputFile, outputFile, resolution, out_extension)
+    retCode = video_transcoder(inputFile, transFile, resolution, out_extension)
 
     if retCode == 0:
         if TMP_DIR:
-            os.rename(outputFile, this_outDir)
+            os.rename(transFile, outputFile)
             os.remove(inputFile)
+        elif DST_DIR:
+            os.rename(transFile, outputFile)
 
         if DEL_SRC:
             os.remove(src_file)
             if torrentID: remove_torrent(torrentID)
-
-        # TODO: Output FileName personalization
-        # if FILENAME:
-        #     # out_fileName = '' % (<vediamo come>, out_extension)
-        #     newFileName = os.path.join(os.path.dirname(outputFile), out_fileName)
-        #     os.rename(outputFile, newFileName)
+            if this_inpDir == this_outDir: os.rename(transFile, outputFile)
 
 
 def get_video_lang(video_lang):
@@ -417,9 +422,7 @@ def args_extraction(argv):
                                                                                                                                                                       ''')
 
     if not argv:
-        log.error("No arguments provided")
-        print "No arguments provided"
-        printHelp()
+        printHelp('No arguments provided')
 
     args = vars(PARSER.parse_args(argv))
 
