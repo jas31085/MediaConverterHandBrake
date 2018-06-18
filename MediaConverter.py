@@ -1,5 +1,7 @@
-#!/bin/env python
+#!/usr/bin/env python
 
+from __future__ import print_function
+import re
 import os
 import sys
 import magic
@@ -13,8 +15,8 @@ from shutil import copyfile
 from distutils.spawn import find_executable
 
 LOG_LEVEL = log.INFO
-# HANDBRAKE_PATH = "/usr/bin/HandBrakeCLI"
-HANDBRAKE_PATH = "/bin/echo"  # Just for testing..
+HANDBRAKE_PATH = os.path.dirname(sys.argv[0]) + "/HandBrakeCLI"
+# HANDBRAKE_PATH = "/bin/echo"  # Just for testing..
 
 RESOLUTIONS = {
     "480":   { 'X': 720,  'Y': 480  },
@@ -53,7 +55,6 @@ PARSER = argparse.ArgumentParser(version     = '%(prog)s 1.0',
 
 def get_media_info(filePath):
     """ Note this is media info cli """
-
     mediainfoPath = find_executable('mediainfo')
     cmd = '%s "%s"' % (mediainfoPath, filePath)
 
@@ -77,15 +78,12 @@ def get_media_info(filePath):
                 category = category.split('#')[0].strip()
                 if oldCategory != category:
                     sub = []
-                # sub[subCategory] = ''
             else:
                 sub = {}
                 subCategory = None
             mainKey[category] = ''
         elif line == '':
             if subCategory:
-                # sub[subCategory] = subsub
-                # sub.append({subCategory: subsub})
                 sub.append(subsub)
             mainKey[category] = sub
         elif ':' in line:
@@ -109,16 +107,19 @@ def is_video_file(filePath):
     if type(filePath) == list:
         filePath = os.path.join(filePath[0], filePath[1])
 
+    if os.path.splitext(filePath)[1].lower() in EXCLUDED_EXT:
+        return False
+
     if not os.path.isfile(filePath):
         return False
 
     if os.path.splitext(filePath)[1].lower() in ['.iso']:
         return is_iso_video(filePath)
 
-    if os.path.splitext(filePath)[1].lower() in EXCLUDED_EXT:
-        return False
-
     if 'video' in magic.from_file(filePath, mime=True).lower():
+        return True
+
+    if 'Video' in get_media_info(filePath):
         return True
 
     return False
@@ -140,40 +141,43 @@ def is_iso_video(filePath):
 
 def video_transcoder(inPath, outPath, res, ext):
     # Preset HandBrake
+    text = ''
+    perc = re.compile('\d{1,3}\.\d{1,3} %')
+
     PRESET = """
-        -e x264
-        -q 20.0
-        -r 30
         --pfr
+        --h264-level 4.0
+        --modulus 2 -m -O
+        --loose-anamorphic
+        --h264-profile high
+        --x264-preset medium
+        -e x264 -q 20.0 -r 30
         --audio 1,2,3,4,5,6,7,8,9,10
         --subtitle scan,1,2,3,4,5,6,7,8,9,10
-        -E ffaac,copy:ac3
-        -B 160,160
-        -6 dpl2,none
-        -R Auto,Auto
-        -D 0.0,0.0
-        --audio-copy-mask aac,ac3,dtshd,dts,mp3
-        --audio-fallback ffac3
-        -4
-        -X %d
-        -Y %d
-        --decomb=fast
-        --loose-anamorphic
-        --modulus 2
-        -m
-        -O
-        --x264-preset medium
-        --h264-profile high
-        --h264-level 4.0
-        %s
+        --audio-fallback ffac3 -X %d -Y %d
+        --audio-copy-mask aac,ac3,dtshd,dts,mp3 %s
+        -E ffaac,copy:ac3 -B 160,160 -6 dpl2,none -R Auto,Auto -D 0.0,0.0
         """ % (RESOLUTIONS[res]["X"], RESOLUTIONS[res]["Y"], '-f %s' % ext if ext else '')
 
     cmd = '"%s" -v -i "%s" %s -o "%s" ' % (HANDBRAKE_PATH, inPath, PRESET.replace('\n', ''), outPath)
+
     process = subprocess.Popen(cmd,
                                shell=True,
                                stderr=subprocess.PIPE,
                                stdout=subprocess.PIPE)
-    (output, error) = process.communicate()
+
+    # (output, error) = process.communicate()
+
+    while True:
+        out = process.stdout.read(1)
+        if out == '' and process.poll() is not None:
+            break
+        if out != '':
+            if '\r' != out:
+                text += out
+            else:
+                if text.strip() != '': print(perc.search(text).group(), end=out)
+                text = ''
 
     return process.returncode
 
@@ -353,7 +357,7 @@ def scan_path(fileList):
 def printHelp(message=None):
     PARSER.print_help()
     if message:
-        print message
+        print(message)
         log.error(message)
     sys.exit(1)
 
