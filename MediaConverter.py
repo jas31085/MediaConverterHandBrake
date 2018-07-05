@@ -600,78 +600,84 @@ def convert_bytes(num):
 def main(argv):
     global LANG
 
-    cont = 0
-    fileList = []
-
-    args_extraction(argv)
+    try:
+        cont = 0
+        fileList = []
     
-    log.info("- - - - - - - - -   START MEDIA CONVERSION   - - - - - - - - -")
-
-    if not HANDBRAKE_PATH:
-        log.error('HandBrakeCLI path not found, exiting')
-        sys.exit(9)
-
-    if LANG:
-        LANG = [x.lower().strip() for x in LANG]
-
-    if FILE_PATH:
-        fileList = scan_file()
-
-    if TXT_PATH:
-        fileList = scan_txt()
-
-    if T_HOST:
-        fileList = scan_torrents(fileList)
-        cont = len(fileList)
-
-    if SRC_DIR:
-        fileList = scan_path(fileList)
-        log.info('Found %d video files during scan' % (len(fileList) - cont))
-
-    log.info('%d total files in list for evaluating' % len(fileList))
-
-    for item in fileList:
-        log.info('Validating %s' % item[1])
-        this_FullPath = os.path.join(item[0], item[1])
-        # this_FileName, this_ext = os.path.splitext(item[1])
-        # this_ext = this_ext.lstrip('.').lower()
-        utils = {}
-        this_lang = []
-
-        if len(item) == 3:
-            log.debug('The File came from Transmission')
-            utils['Transmission_ID'] = item[2]
-
-        mediaInfo = get_media_info(this_FullPath)
-
-        if 'ISO' in mediaInfo['General']['Format']:
-            log.debug("Start Processing ISO file")
-            copy_transcode(this_FullPath)
-            continue
-
-        if 'Video' not in mediaInfo:
-            log.debug("Missing 'Video' tag in mediainfo for '%s'" % item[1])
-            continue
-
-        H = this_res = int(mediaInfo['Video']['Height'].replace(' ', '').replace('pixels', ''))
-        W = int(mediaInfo['Video']['Width'].replace(' ', '').replace('pixels', ''))
-
-        log.debug('Video original resolution: %dx%d' % (W, H))
-        log.debug('Video target resolution: %dx%d' % (RESOLUTIONS[MAX_RES]['X'], RESOLUTIONS[MAX_RES]['Y']))
-
-        if this_res > RESOLUTIONS[MAX_RES]['Y']:
-        # if this_res > 0:
-            if 'Audio' in mediaInfo:
-                this_lang = get_video_lang(mediaInfo['Audio'])
-                utils['audio_naming'] = this_lang
-
-            if lang_exists(this_lang):
-                copy_transcode(this_FullPath, utils)
-
-    log.info("- - - - - - - - -   END MEDIA CONVERSION   - - - - - - - - -")
-
-    os.remove(PID)
-                
+        args_extraction(argv)
+        
+        log.info("- - - - - - - - -   START MEDIA CONVERSION   - - - - - - - - -")
+    
+        if not HANDBRAKE_PATH:
+            log.error('HandBrakeCLI path not found, exiting')
+            sys.exit(9)
+    
+        if LANG:
+            LANG = [x.lower().strip() for x in LANG]
+    
+        if FILE_PATH:
+            fileList = scan_file()
+    
+        if TXT_PATH:
+            fileList = scan_txt()
+    
+        if T_HOST:
+            fileList = scan_torrents(fileList)
+            cont = len(fileList)
+    
+        if SRC_DIR:
+            fileList = scan_path(fileList)
+            log.info('Found %d video files during scan' % (len(fileList) - cont))
+    
+        log.info('%d total files in list for evaluating' % len(fileList))
+    
+        for item in fileList:
+            log.info('Validating %s' % item[1])
+            this_FullPath = os.path.join(item[0], item[1])
+            # this_FileName, this_ext = os.path.splitext(item[1])
+            # this_ext = this_ext.lstrip('.').lower()
+            utils = {}
+            this_lang = []
+    
+            if len(item) == 3:
+                log.debug('The File came from Transmission')
+                utils['Transmission_ID'] = item[2]
+    
+            mediaInfo = get_media_info(this_FullPath)
+    
+            if 'ISO' in mediaInfo['General']['Format']:
+                log.debug("Start Processing ISO file")
+                copy_transcode(this_FullPath)
+                continue
+    
+            if 'Video' not in mediaInfo:
+                log.debug("Missing 'Video' tag in mediainfo for '%s'" % item[1])
+                continue
+    
+            H = this_res = int(mediaInfo['Video']['Height'].replace(' ', '').replace('pixels', ''))
+            W = int(mediaInfo['Video']['Width'].replace(' ', '').replace('pixels', ''))
+    
+            log.debug('Video original resolution: %dx%d' % (W, H))
+            log.debug('Video target resolution: %dx%d' % (RESOLUTIONS[MAX_RES]['X'], RESOLUTIONS[MAX_RES]['Y']))
+    
+            if this_res > RESOLUTIONS[MAX_RES]['Y']:
+            # if this_res > 0:
+                if 'Audio' in mediaInfo:
+                    this_lang = get_video_lang(mediaInfo['Audio'])
+                    utils['audio_naming'] = this_lang
+    
+                if lang_exists(this_lang):
+                    copy_transcode(this_FullPath, utils)
+    
+        log.info("- - - - - - - - -   END MEDIA CONVERSION   - - - - - - - - -")
+    
+    except Exception as e:
+        log.error (e.message, exc_info=True)
+        log.error("'%s'")
+        
+    finally:
+        os.remove(PID)
+    
 
 
 ########################################
