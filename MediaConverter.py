@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 
-from __future__ import print_function
 import re
 import os
 import sys
@@ -8,13 +7,14 @@ import magic
 import iso9660
 import logging
 import argparse
+import tempfile
 import subprocess
 import transmissionrpc as trpc
 
 from shutil import copyfile
 from distutils.spawn import find_executable
 
-HANDBRAKE_PATH = os.path.dirname(sys.argv[0]) + "/HandBrakeCLI"
+HANDBRAKE_PATH = os.path.dirname(__file__) + "/HandBrakeCLI"
 # HANDBRAKE_PATH = "/bin/echo"  # Just for testing..
 
 RESOLUTIONS = {
@@ -31,6 +31,7 @@ EXCLUDED_EXT = [ '.part' ]
 EXTRA_OPTS = [ "audio_naming" ]
 
 log       = None
+LOG_FILE  = None
 SRC_DIR   = None
 TMP_DIR   = None
 DST_DIR   = None
@@ -52,6 +53,7 @@ EXTRA     = None
 PARSER = argparse.ArgumentParser(version     = '%(prog)s 1.0',
                                  add_help    = True, conflict_handler = 'resolve',
                                  description = 'Just another HandBrakeCLI batch executor.')
+PID = os.path.join(tempfile.gettempdir(), os.path.splitext(os.path.basename(__file__))[0] + '.pid')
 
 
 def log_setup(logLevel):
@@ -59,8 +61,10 @@ def log_setup(logLevel):
     logger.setLevel(logLevel)
 
     # create a file handler
-    # handler = logging.FileHandler('__name__.log')
-    handler = logging.StreamHandler()
+    if LOG_FILE:
+        handler = logging.FileHandler(LOG_FILE)
+    else:
+        handler = logging.StreamHandler()
     handler.setLevel(logLevel)
 
     # create a logging format
@@ -75,6 +79,7 @@ def log_setup(logLevel):
 
 def args_extraction(argv):
     global log
+    global LOG_FILE
     global SRC_DIR
     global TMP_DIR
     global DST_DIR
@@ -99,6 +104,7 @@ def args_extraction(argv):
 
     PARSER.add_argument(       '--extra',       action = "store",      default = None,   dest = "EXTRA",     type = str,   required = False, metavar='Extra Opt',  nargs='+', help = 'Set extra parameter (use one of: %s)' % ', '.join(EXTRA_OPTS))
     PARSER.add_argument(       '--debug',       action = "store_true", default = False,  dest = "DEBUG",                   required = False,                       help = 'Set log level to Debug')
+    PARSER.add_argument(       '--log-file',    action = "store",      default = None,   dest = "LOG_FILE",  type = str,   required = False, metavar='logPath',    help = 'Logs output on file')
     g_group.add_argument('-D', '--delete',      action = "store_true", default = False,  dest = "DEL_SRC",                 required = False,                       help = 'Delete Source file')
     g_group.add_argument('-s', '--source',      action = "store",      default = None,   dest = "SRC_DIR",   type = str,   required = False, metavar='SourcePath', help = 'Source path used for scan')
     g_group.add_argument('-t', '--tmp',         action = "store",      default = None,   dest = "TMP_DIR",   type = str,   required = False, metavar='TempPath',   help = 'Temporary folder')
@@ -136,6 +142,9 @@ def args_extraction(argv):
         logLevel = logging.DEBUG
     else:
         logLevel = logging.INFO
+
+    if args['LOG_FILE']:
+        LOG_FILE = args['LOG_FILE']
 
     log = log_setup(logLevel)
 
@@ -273,7 +282,7 @@ def is_video_file(filePath):
         return True
 
     if 'Video' in get_media_info(filePath):
-        log.info("'%s' OK: The file is a video." % (os.path.basename(filePath), magicInfo))
+        log.info("'%s' OK: The file is a video." % os.path.basename(filePath))
         return True
 
     return False
@@ -477,7 +486,7 @@ def get_completed_downloads():
                     elif is_video_file( [torrent._fields['downloadDir'].value, value['name']] ):
                         retList.append( [ torrent._fields['downloadDir'].value, value['name'], torrent._fields['id'].value ] )
 
-    #TODO: Correggi il ciclo
+    # TODO: Riduci il ciclo
     if MASK_DIR:
         for path, subdirs, files in os.walk(MASK_DIR):
             for name in files:
@@ -539,7 +548,7 @@ def scan_torrents(fileList):
 
 
 def scan_path(fileList):
-    for path, subdirs, files in os.walk(SRC_DIR):
+    for path, subdirs, files in os.walk(SRC_DIR, topdown=True):
         for file in files:
             try:
                 if is_video_file([path, file]):
@@ -548,7 +557,9 @@ def scan_path(fileList):
                     file_size = convert_bytes(file_info.st_size)
                     if file_size >= MAX_SIZE:
                         fileList.append([path, file])
-            except:
+            except Exception as e:
+                log.error("Cannot open file '%s'" % file, exc_info=True)
+                log.error("'%s'")
                 pass
 
     return fileList
@@ -635,5 +646,19 @@ def main(argv):
 ########################################
 ########################################
 
+
 if __name__ == "__main__":
-    main(sys.argv[1:])
+    if os.path.isfile(PID):
+        print 'Process already exists, exiting'
+        sys.exit()
+
+    try:
+        # open(PID, 'w').write(str(os.getpid()))
+        main(sys.argv[1:])
+
+    except Exception:
+        print 'Another instance is running..'
+        sys.exit(0)
+
+    finally:
+        os.unlink(PID)
