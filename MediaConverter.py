@@ -14,8 +14,13 @@ import transmissionrpc as trpc
 from shutil import copyfile
 from distutils.spawn import find_executable
 
-HANDBRAKE_PATH = os.path.dirname(__file__) + "/HandBrakeCLI"
+# HANDBRAKE_PATH = os.path.dirname(__file__) + "/HandBrakeCLI"
+HANDBRAKE_PATH = find_executable('HandBrakeCLI')
 # HANDBRAKE_PATH = "/bin/echo"  # Just for testing..
+
+NICE_PATH = find_executable('nice')
+
+PID = os.path.join(tempfile.gettempdir(), os.path.splitext(os.path.basename(__file__))[0] + '.pid')
 
 RESOLUTIONS = {
     "480":   { 'X': 720,  'Y': 480  },
@@ -53,8 +58,6 @@ EXTRA     = None
 PARSER = argparse.ArgumentParser(version     = '%(prog)s 1.0',
                                  add_help    = True, conflict_handler = 'resolve',
                                  description = 'Just another HandBrakeCLI batch executor.')
-PID = os.path.join(tempfile.gettempdir(), os.path.splitext(os.path.basename(__file__))[0] + '.pid')
-
 
 def log_setup(logLevel):
     logger = logging.getLogger(__name__)
@@ -147,6 +150,8 @@ def args_extraction(argv):
         LOG_FILE = args['LOG_FILE']
 
     log = log_setup(logLevel)
+    
+    pid_file()
 
     for key, value in dict(args).iteritems():
         globals()[key] = value
@@ -206,8 +211,21 @@ def printHelp(message=None):
     PARSER.print_help()
     if message:
         print(message)
-        log.error(message)
     sys.exit(1)
+
+
+def pid_file():
+    if os.path.isfile(PID):
+        log.error('Process already exists, exiting')
+        sys.exit(2)
+
+    try:
+        open(PID, 'w').write(str(os.getpid()))
+        log.info('Writing PID in: %s' % PID)
+    
+    except Exception:
+        log.error('Another instance is running...')
+        sys.exit(9)
 
 
 def get_media_info(filePath):
@@ -273,16 +291,19 @@ def is_video_file(filePath):
         return False
 
     if os.path.splitext(filePath)[1].lower() in ['.iso']:
-        log.info('ISO File found.')
+        log.info('%s ISO File found.' % filePath)
         return is_iso_video(filePath)
 
     magicInfo = magic.from_file(filePath, mime=True)
+
     if 'video' in magicInfo.lower():
         log.info("'%s' OK: %s" % (os.path.basename(filePath), magicInfo))
+        # Todo: verifica risoluzione, dimensione, lingue audio,
         return True
 
     if 'Video' in get_media_info(filePath):
         log.info("'%s' OK: The file is a video." % os.path.basename(filePath))
+        # Todo: verifica risoluzione, dimensione, lingue audio,
         return True
 
     return False
@@ -325,7 +346,7 @@ def video_transcoder(inPath, outPath, res, ext):
         -E ffaac,copy:ac3 -B 160,160 -6 dpl2,none -R Auto,Auto -D 0.0,0.0
         """ % (RESOLUTIONS[res]["X"], RESOLUTIONS[res]["Y"], '-f %s' % ext if ext else '')
 
-    cmd = '"%s" -v -i "%s" %s -o "%s" ' % (HANDBRAKE_PATH, inPath, PRESET.replace('\n', ''), outPath)
+    cmd = '"%s" -n 19 "%s" -v -i "%s" %s -o "%s" ' % (NICE_PATH, HANDBRAKE_PATH, inPath, PRESET.replace('\n', ''), outPath)
 
     log.info('Starting video conversion')
     log.debug('%s' % cmd)
@@ -411,7 +432,8 @@ def copy_transcode(src_file, utils=None):
     # The magic begins..
     if TMP_DIR:
         log.info('Start copying file to temporary directory.')
-        copyfile(src_file, TMP_DIR)
+        copyfile(src_file, inputFile)
+        log.debug('Finisch copy fileto temporary directory.')
 
     retCode = video_transcoder(inputFile, transFile, resolution, out_extension)
 
@@ -582,6 +604,12 @@ def main(argv):
     fileList = []
 
     args_extraction(argv)
+    
+    log.info("- - - - - - - - -   START MEDIA CONVERSION   - - - - - - - - -")
+
+    if not HANDBRAKE_PATH:
+        log.error('HandBrakeCLI path not found, exiting')
+        sys.exit(9)
 
     if LANG:
         LANG = [x.lower().strip() for x in LANG]
@@ -617,6 +645,7 @@ def main(argv):
         mediaInfo = get_media_info(this_FullPath)
 
         if 'ISO' in mediaInfo['General']['Format']:
+            log.debug("Start Processing ISO file")
             copy_transcode(this_FullPath)
             continue
 
@@ -630,14 +659,19 @@ def main(argv):
         log.debug('Video original resolution: %dx%d' % (W, H))
         log.debug('Video target resolution: %dx%d' % (RESOLUTIONS[MAX_RES]['X'], RESOLUTIONS[MAX_RES]['Y']))
 
-        # if this_res > RESOLUTIONS[MAX_RES]['Y']:
-        if this_res > 0:
+        if this_res > RESOLUTIONS[MAX_RES]['Y']:
+        # if this_res > 0:
             if 'Audio' in mediaInfo:
                 this_lang = get_video_lang(mediaInfo['Audio'])
                 utils['audio_naming'] = this_lang
 
             if lang_exists(this_lang):
                 copy_transcode(this_FullPath, utils)
+
+    log.info("- - - - - - - - -   END MEDIA CONVERSION   - - - - - - - - -")
+
+    os.remove(PID)
+                
 
 
 ########################################
@@ -648,17 +682,4 @@ def main(argv):
 
 
 if __name__ == "__main__":
-    if os.path.isfile(PID):
-        print 'Process already exists, exiting'
-        sys.exit()
-
-    try:
-        # open(PID, 'w').write(str(os.getpid()))
-        main(sys.argv[1:])
-
-    except Exception:
-        print 'Another instance is running..'
-        sys.exit(0)
-
-    finally:
-        os.unlink(PID)
+    main(sys.argv[1:])
