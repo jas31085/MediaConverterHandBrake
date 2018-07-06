@@ -12,6 +12,7 @@ import subprocess
 import transmissionrpc as trpc
 
 from shutil import copyfile
+from shutil import move
 from distutils.spawn import find_executable
 
 # HANDBRAKE_PATH = os.path.dirname(__file__) + "/HandBrakeCLI"
@@ -432,6 +433,7 @@ def copy_transcode(src_file, utils=None):
     # The magic begins..
     if TMP_DIR:
         log.info('Start copying file to temporary directory.')
+        log.debug('cp %s %s' % (src_file, inputFile))
         copyfile(src_file, inputFile)
         log.debug('Finisch copy fileto temporary directory.')
 
@@ -441,21 +443,26 @@ def copy_transcode(src_file, utils=None):
         log.info('Conversion finished without error.')
         if TMP_DIR:
             log.info('Moving file from temporary to appropriate directory.')
-            os.rename(transFile, outputFile)
+            log.debug('mv %s %s' % (transFile, outputFile))
+            move(transFile, outputFile)
+            log.debug('rm "%s"' % inputFile)
             os.remove(inputFile)
         elif DST_DIR:
             log.info('Moving file to appropriate directory.')
-            os.rename(transFile, outputFile)
+            log.debug('mv %s %s' % (transFile, outputFile))
+            move(transFile, outputFile)
         elif this_lang:
             log.info('Renaming output file with extra informations.')
-            os.rename(transFile, outputFile)
+            log.debug('mv %s %s' % (transFile, outputFile))
+            move(transFile, outputFile)
             this_inpDir = None
 
         if DEL_SRC:
             log.info('Removing original file.')
+            log.debug('rm "%s"' % src_file)
             os.remove(src_file)
             if torrentID: remove_torrent(torrentID)
-            if this_inpDir == this_outDir: os.rename(transFile, outputFile)
+            if this_inpDir == this_outDir: move(transFile, outputFile)
     else:
         log.error('Something goes wrong during conversion..')
 
@@ -598,6 +605,7 @@ def convert_bytes(num):
 
 
 def main(argv):
+    
     global LANG
 
     try:
@@ -673,7 +681,7 @@ def main(argv):
     
     except Exception as e:
         log.error (e.message, exc_info=True)
-        log.error("'%s'")
+        log.error("%s")
         
     finally:
         os.remove(PID)
