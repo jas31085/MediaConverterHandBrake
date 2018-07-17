@@ -16,8 +16,8 @@ from shutil import move
 from distutils.spawn import find_executable
 
 # HANDBRAKE_PATH = os.path.dirname(__file__) + "/HandBrakeCLI"
-HANDBRAKE_PATH = find_executable('HandBrakeCLI')
-# HANDBRAKE_PATH = "/bin/echo"  # Just for testing..
+# HANDBRAKE_PATH = find_executable('HandBrakeCLI')
+HANDBRAKE_PATH = "/bin/echo"  # Just for testing..
 
 NICE_PATH = find_executable('nice')
 
