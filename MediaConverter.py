@@ -143,7 +143,7 @@ def args_extraction(argv):
     args = vars(PARSER.parse_args(argv))
 
     if args['DEBUG']:
-        logLevel = logging.DEBUG
+       logLevel = logging.DEBUG
     else:
         logLevel = logging.INFO
 
@@ -435,7 +435,7 @@ def copy_transcode(src_file, utils=None):
         log.info('Start copying file to temporary directory.')
         log.debug('cp %s %s' % (src_file, inputFile))
         copyfile(src_file, inputFile)
-        log.debug('Finisch copy fileto temporary directory.')
+        log.debug('Finish copy file to temporary directory.')
 
     retCode = video_transcoder(inputFile, transFile, resolution, out_extension)
 
@@ -462,7 +462,7 @@ def copy_transcode(src_file, utils=None):
             log.debug('rm "%s"' % src_file)
             os.remove(src_file)
             if torrentID: remove_torrent(torrentID)
-            if this_inpDir == this_outDir: move(transFile, outputFile)
+            if this_inpDir == this_outDir and not TMP_DIR: move(transFile, outputFile)
     else:
         log.error('Something goes wrong during conversion..')
 
@@ -684,7 +684,9 @@ def main(argv):
         log.error("%s")
         
     finally:
-        os.remove(PID)
+        pidnumber = open(PID, 'r').read()
+        if pidnumber == str(os.getpid()):
+            os.remove(PID)
     
 
 
