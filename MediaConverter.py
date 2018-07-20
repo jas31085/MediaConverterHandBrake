@@ -16,8 +16,8 @@ from shutil import move
 from distutils.spawn import find_executable
 
 # HANDBRAKE_PATH = os.path.dirname(__file__) + "/HandBrakeCLI"
-# HANDBRAKE_PATH = find_executable('HandBrakeCLI')
-HANDBRAKE_PATH = "/bin/echo"  # Just for testing..
+HANDBRAKE_PATH = find_executable('HandBrakeCLI')
+# HANDBRAKE_PATH = "/bin/echo"  # Just for testing..
 
 NICE_PATH = find_executable('nice')
 
@@ -443,17 +443,17 @@ def copy_transcode(src_file, utils=None):
         log.info('Conversion finished without error.')
         if TMP_DIR:
             log.info('Moving file from temporary to appropriate directory.')
-            log.debug('mv %s %s' % (transFile, outputFile))
+            log.debug('mv "%s" "%s"' % (transFile, outputFile))
             move(transFile, outputFile)
             log.debug('rm "%s"' % inputFile)
             os.remove(inputFile)
         elif DST_DIR:
             log.info('Moving file to appropriate directory.')
-            log.debug('mv %s %s' % (transFile, outputFile))
+            log.debug('mv "%s" "%s"' % (transFile, outputFile))
             move(transFile, outputFile)
         elif this_lang:
             log.info('Renaming output file with extra informations.')
-            log.debug('mv %s %s' % (transFile, outputFile))
+            log.debug('mv "%s" "%s"' % (transFile, outputFile))
             move(transFile, outputFile)
             this_inpDir = None
 
