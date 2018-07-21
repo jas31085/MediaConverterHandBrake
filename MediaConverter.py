@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# -*- coding: utf-8 -*-
 
 import re
 import os
@@ -11,6 +12,7 @@ import tempfile
 import subprocess
 import transmissionrpc as trpc
 
+from unicodedata import normalize
 from shutil import copyfile
 from shutil import move
 from distutils.spawn import find_executable
@@ -538,8 +540,9 @@ def remove_torrent(torrentID):
 
 def scan_file():
     log.info("Evaluating file: %s" % FILE_PATH)
-    if is_video_file(FILE_PATH):
-        return [ [ os.path.dirname(FILE_PATH), os.path.basename(FILE_PATH) ] ]
+    line_cleaned = remove_accents(FILE_PATH)
+    if is_video_file(line_cleaned):
+        return [ [ os.path.dirname(line_cleaned), os.path.basename(line_cleaned) ] ]
 
     return []
 
@@ -555,6 +558,7 @@ def scan_txt():
             line_cleaned = line.strip('\r').strip()
             if line_cleaned != '':
                 if is_video_file(line_cleaned):
+                    line_cleaned = remove_accents(line_cleaned)
                     retList.append( [ os.path.dirname(line_cleaned), os.path.basename(line_cleaned) ] )
 
     log.info('Found %d files in the text file' % len(retList))
@@ -582,8 +586,10 @@ def scan_path(fileList):
             try:
                 if is_video_file([path, file]):
                     file_path = os.path.join(path, file)
-                    file_info = os.stat(file_path)
+                    line_cleaned = remove_accents(file_path)
+                    file_info = os.stat(line_cleaned)
                     file_size = convert_bytes(file_info.st_size)
+                    file = os.path.basename(line_cleaned)
                     if file_size >= MAX_SIZE:
                         fileList.append([path, file])
             except Exception as e:
@@ -602,6 +608,21 @@ def convert_bytes(num):
         num /= 1024.0
 
     return float("%3.1f" % num)
+
+
+def remove_accents(old_path):
+    unclean_file = os.path.basename(old_path)
+    log.debug('Normalize file name')
+    if type(unclean_file) is not unicode:
+        path = unicode(unclean_file, encoding='utf-8')
+        path = normalize('NFD', path).encode('ascii', 'ignore')
+        clean_file = re.sub(u"[!#$%&'*+,:;<=>?@^`{|}~]", ' ', path)
+        clean_path = os.path.join(os.path.dirname(old_path) , clean_file)
+        if not old_path == clean_path:
+            log.debug('Rename file from %s to %s' % (unclean_file,clean_file))
+            os.rename(old_path, clean_path)
+    
+    return clean_path
 
 
 def main(argv):
@@ -646,18 +667,24 @@ def main(argv):
             # this_ext = this_ext.lstrip('.').lower()
             utils = {}
             this_lang = []
-    
+
+            log.debug('The File came from Transmission? %s' % item[1])
             if len(item) == 3:
                 log.debug('The File came from Transmission')
                 utils['Transmission_ID'] = item[2]
-    
+            else:
+                log.debug('NO')
+                
+            log.debug("Get Mediainfo from %s" % item[1])
             mediaInfo = get_media_info(this_FullPath)
-    
+            
+            log.debug("Media is ISO File? %s" % item[1])
             if 'ISO' in mediaInfo['General']['Format']:
                 log.debug("Start Processing ISO file")
                 copy_transcode(this_FullPath)
                 continue
-    
+            
+            log.debug("Media have Video in File? %s" % item[1])
             if 'Video' not in mediaInfo:
                 log.debug("Missing 'Video' tag in mediainfo for '%s'" % item[1])
                 continue
@@ -668,6 +695,7 @@ def main(argv):
             log.debug('Video original resolution: %dx%d' % (W, H))
             log.debug('Video target resolution: %dx%d' % (RESOLUTIONS[MAX_RES]['X'], RESOLUTIONS[MAX_RES]['Y']))
     
+            log.debug("Media have the correct Resolution? %s" % item[1])
             if this_res > RESOLUTIONS[MAX_RES]['Y']:
             # if this_res > 0:
                 if 'Audio' in mediaInfo:
