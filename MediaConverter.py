@@ -8,8 +8,10 @@ import magic
 import iso9660
 import logging
 import argparse
+import telegram
 import tempfile
 import subprocess
+import configparser
 import transmissionrpc as trpc
 
 from unicodedata import normalize
@@ -38,25 +40,32 @@ RESOLUTIONS = {
 EXCLUDED_EXT = [ '.part' ]
 EXTRA_OPTS = [ "audio_naming" ]
 
-log       = None
-LOG_FILE  = None
-SRC_DIR   = None
-TMP_DIR   = None
-DST_DIR   = None
-MASK_DIR  = None
-TXT_PATH  = None
-FILE_PATH = None
-OUT_EXT   = None
-T_HOST    = None
-T_PORT    = 9091
-T_USER    = None
-T_PSW     = None
-MAX_SIZE  = 1200.0
-MAX_RES   = '720'
-LANG      = None
-DEL_SRC   = False
-DEBUG     = False
-EXTRA     = None
+log             = None
+LOG_FILE        = None
+SRC_DIR         = None
+TMP_DIR         = None
+DST_DIR         = None
+MASK_DIR        = None
+TXT_PATH        = None
+FILE_PATH       = None
+OUT_EXT         = None
+T_HOST          = None
+T_PORT          = 9091
+T_USER          = None
+T_PSW           = None
+MAX_SIZE        = 1200.0
+MAX_RES         = '720'
+LANG            = None
+DEL_SRC         = False
+DEBUG           = False
+EXTRA           = None
+CONFIG_FILE     = None
+#token that can be generated talking with @BotFather on telegram
+TOKEN = None
+# Chat ID
+# https://api.telegram.org/bot<YourBOTToken>/getUpdates
+CHAT_ID = None
+
 
 PARSER = argparse.ArgumentParser(version     = '%(prog)s 1.0',
                                  add_help    = True, conflict_handler = 'resolve',
@@ -83,6 +92,58 @@ def log_setup(logLevel):
     return logger
 
 
+def config_file_read():
+    global log
+    global LOG_FILE
+    global SRC_DIR
+    global TMP_DIR
+    global DST_DIR
+    global MASK_DIR
+    global TXT_PATH
+    global FILE_PATH
+    global OUT_EXT
+    global T_HOST
+    global T_PORT
+    global T_USER
+    global T_PSW
+    global MAX_SIZE
+    global MAX_RES
+    global LANG
+    global DEL_SRC
+    global DEBUG
+    global EXTRA
+    global CONFIG_FILE
+
+    config = configparser.ConfigParser()
+    config.read(CONFIG_FILE)
+    
+    defaults = dict(config['default'])
+    paths = dict(config['path'])
+    torrents = dict(config['torrent'])
+    telegrams = dict(config['telegram'])
+    logs = dict(config['log'])
+    extras = dict(config['extra'])
+    
+    for key, value in defaults.iteritems():
+        print(key.upper())
+        globals()[key.upper()] = value
+    
+    for key, value in paths.iteritems():
+        globals()[key.upper()] = value
+        
+    for key, value in torrents.iteritems():
+        globals()[key.upper()] = value
+        
+    for key, value in telegrams.iteritems():
+        globals()[key.upper()] = value
+        
+    for key, value in logs.iteritems():
+        globals()[key.upper()] = value
+        
+    for key, value in extras.iteritems():
+        globals()[key.upper()] = value
+
+
 def args_extraction(argv):
     global log
     global LOG_FILE
@@ -103,13 +164,17 @@ def args_extraction(argv):
     global DEL_SRC
     global DEBUG
     global EXTRA
+    global CONFIG_FILE
 
     g_group = PARSER.add_argument_group('Input Scan')
     t_group = PARSER.add_argument_group('Transmission')
     v_group = PARSER.add_argument_group('Video')
 
+    # p = configargparse.ArgParser(default_config_files=['/etc/app/conf.d/*.conf', '~/.my_settings'])
+
     PARSER.add_argument(       '--extra',       action = "store",      default = None,   dest = "EXTRA",     type = str,   required = False, metavar='Extra Opt',  nargs='+', help = 'Set extra parameter (use one of: %s)' % ', '.join(EXTRA_OPTS))
     PARSER.add_argument(       '--debug',       action = "store_true", default = False,  dest = "DEBUG",                   required = False,                       help = 'Set log level to Debug')
+    PARSER.add_argument(       '--config',      action = "store",      default = None,   dest = "CONFIG_FILE",             required = False,                       help = 'Set Configuration File')
     PARSER.add_argument(       '--log-file',    action = "store",      default = None,   dest = "LOG_FILE",  type = str,   required = False, metavar='logPath',    help = 'Logs output on file')
     g_group.add_argument('-D', '--delete',      action = "store_true", default = False,  dest = "DEL_SRC",                 required = False,                       help = 'Delete Source file')
     g_group.add_argument('-s', '--source',      action = "store",      default = None,   dest = "SRC_DIR",   type = str,   required = False, metavar='SourcePath', help = 'Source path used for scan')
@@ -159,12 +224,22 @@ def args_extraction(argv):
     for key, value in dict(args).iteritems():
         globals()[key] = value
         log.debug('%s: %s' % (key, value))
-
+    
     check_parameters()
 
 
 def check_parameters():
     global EXTRA
+    global log
+
+    if CONFIG_FILE:
+        config_file_read()
+        if DEBUG == True:
+            logLevel = logging.DEBUG
+            log = log_setup(logLevel)
+        else:
+            logLevel = logging.INFO
+            log = log_setup(logLevel)
 
     if not T_HOST and MASK_DIR:
         printHelp('Cannot set Mask directory if Torrent Host is not defined')
@@ -213,7 +288,7 @@ def check_parameters():
 def printHelp(message=None):
     PARSER.print_help()
     if message:
-        print(message)
+        log.error(message)
     sys.exit(1)
 
 
@@ -440,9 +515,11 @@ def copy_transcode(src_file, utils=None):
         log.debug('Finish copy file to temporary directory.')
 
     retCode = video_transcoder(inputFile, transFile, resolution, out_extension)
-
+    
     if retCode == 0:
         log.info('Conversion finished without error.')
+        msg = "Fine Conversione del Video: %s" % os.path.basename(outputFile)
+        send_telegram_notification(msg)
         if TMP_DIR:
             log.info('Moving file from temporary to appropriate directory.')
             log.debug('mv "%s" "%s"' % (transFile, outputFile))
@@ -617,12 +694,21 @@ def remove_accents(old_path):
         path = unicode(unclean_file, encoding='utf-8')
         path = normalize('NFD', path).encode('ascii', 'ignore')
         clean_file = re.sub(u"[!#$%&'*+,:;<=>?@^`{|}~]", ' ', path)
-        clean_path = os.path.join(os.path.dirname(old_path) , clean_file)
+        clean_path = os.path.join(os.path.dirname(old_path), clean_file)
         if not old_path == clean_path:
             log.debug('Rename file from %s to %s' % (unclean_file,clean_file))
             os.rename(old_path, clean_path)
+    else:
+        clean_path = old_path
     
     return clean_path
+
+
+def send_telegram_notification(msg):
+    log.debug('Send Telegram Notification: %s' % msg)
+    if not msg == None:
+        bot = telegram.Bot(token=TOKEN)
+        bot.sendMessage(chat_id=CHAT_ID, text=msg)
 
 
 def main(argv):
@@ -636,6 +722,7 @@ def main(argv):
         args_extraction(argv)
         
         log.info("- - - - - - - - -   START MEDIA CONVERSION   - - - - - - - - -")
+        send_telegram_notification("start Conversion")
     
         if not HANDBRAKE_PATH:
             log.error('HandBrakeCLI path not found, exiting')
@@ -673,11 +760,10 @@ def main(argv):
                 log.debug('The File came from Transmission')
                 utils['Transmission_ID'] = item[2]
             else:
-                log.debug('NO')
+                log.debug('NO Transmission File')
                 
             log.debug("Get Mediainfo from %s" % item[1])
             mediaInfo = get_media_info(this_FullPath)
-            
             log.debug("Media is ISO File? %s" % item[1])
             if 'ISO' in mediaInfo['General']['Format']:
                 log.debug("Start Processing ISO file")
@@ -696,8 +782,8 @@ def main(argv):
             log.debug('Video target resolution: %dx%d' % (RESOLUTIONS[MAX_RES]['X'], RESOLUTIONS[MAX_RES]['Y']))
     
             log.debug("Media have the correct Resolution? %s" % item[1])
-            if this_res > RESOLUTIONS[MAX_RES]['Y']:
-            # if this_res > 0:
+            # if this_res > RESOLUTIONS[MAX_RES]['Y']:
+            if this_res > 0:
                 if 'Audio' in mediaInfo:
                     this_lang = get_video_lang(mediaInfo['Audio'])
                     utils['audio_naming'] = this_lang
@@ -708,7 +794,7 @@ def main(argv):
         log.info("- - - - - - - - -   END MEDIA CONVERSION   - - - - - - - - -")
     
     except Exception as e:
-        log.error (e.message, exc_info=True)
+        log.error(e.message, exc_info=True)
         log.error("%s")
         
     finally:
