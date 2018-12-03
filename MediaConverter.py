@@ -23,6 +23,7 @@ from distutils.spawn import find_executable
 HANDBRAKE_PATH = find_executable('HandBrakeCLI')
 # HANDBRAKE_PATH = "/bin/echo"  # Just for testing..
 
+
 NICE_PATH = find_executable('nice')
 
 PID = os.path.join(tempfile.gettempdir(), os.path.splitext(os.path.basename(__file__))[0] + '.pid')
@@ -60,12 +61,9 @@ DEL_SRC         = False
 DEBUG           = False
 EXTRA           = None
 CONFIG_FILE     = None
-#token that can be generated talking with @BotFather on telegram
-TOKEN = None
-# Chat ID
-# https://api.telegram.org/bot<YourBOTToken>/getUpdates
-CHAT_ID = None
-
+TOKEN           = None
+CHAT_ID         = None
+FORCE_EXT       = None
 
 PARSER = argparse.ArgumentParser(version     = '%(prog)s 1.0',
                                  add_help    = True, conflict_handler = 'resolve',
@@ -113,7 +111,8 @@ def config_file_read():
     global DEBUG
     global EXTRA
     global CONFIG_FILE
-
+    global FORCE_EXT
+    
     config = configparser.ConfigParser()
     config.read(CONFIG_FILE)
     
@@ -125,7 +124,6 @@ def config_file_read():
     extras = dict(config['extra'])
     
     for key, value in defaults.iteritems():
-        print(key.upper())
         globals()[key.upper()] = value
     
     for key, value in paths.iteritems():
@@ -165,17 +163,20 @@ def args_extraction(argv):
     global DEBUG
     global EXTRA
     global CONFIG_FILE
+    global FORCE_EXT
 
     g_group = PARSER.add_argument_group('Input Scan')
     t_group = PARSER.add_argument_group('Transmission')
     v_group = PARSER.add_argument_group('Video')
+    e_group = PARSER.add_argument_group('Exctra argument')
 
     # p = configargparse.ArgParser(default_config_files=['/etc/app/conf.d/*.conf', '~/.my_settings'])
 
-    PARSER.add_argument(       '--extra',       action = "store",      default = None,   dest = "EXTRA",     type = str,   required = False, metavar='Extra Opt',  nargs='+', help = 'Set extra parameter (use one of: %s)' % ', '.join(EXTRA_OPTS))
-    PARSER.add_argument(       '--debug',       action = "store_true", default = False,  dest = "DEBUG",                   required = False,                       help = 'Set log level to Debug')
-    PARSER.add_argument(       '--config',      action = "store",      default = None,   dest = "CONFIG_FILE",             required = False,                       help = 'Set Configuration File')
-    PARSER.add_argument(       '--log-file',    action = "store",      default = None,   dest = "LOG_FILE",  type = str,   required = False, metavar='logPath',    help = 'Logs output on file')
+    e_group.add_argument(       '--extra',      action = "store",      default = None,   dest = "EXTRA",     type = str,   required = False, metavar='Extra Opt',  nargs='+', help = 'Set extra parameter (use one of: %s)' % ', '.join(EXTRA_OPTS))
+    e_group.add_argument(       '--debug',      action = "store_true", default = False,  dest = "DEBUG",                   required = False,                       help = 'Set log level to Debug')
+    e_group.add_argument(       '--config',     action = "store",      default = None,   dest = "CONFIG_FILE",             required = False,                       help = 'Set Configuration File')
+    e_group.add_argument('-F','--force',        action = "store",      default = False,  dest = "FORCE_EXT",               required = False,                       help = 'Force MKV extension')
+    e_group.add_argument(       '--log-file',   action = "store",      default = None,   dest = "LOG_FILE",  type = str,   required = False, metavar='logPath',    help = 'Logs output on file')
     g_group.add_argument('-D', '--delete',      action = "store_true", default = False,  dest = "DEL_SRC",                 required = False,                       help = 'Delete Source file')
     g_group.add_argument('-s', '--source',      action = "store",      default = None,   dest = "SRC_DIR",   type = str,   required = False, metavar='SourcePath', help = 'Source path used for scan')
     g_group.add_argument('-t', '--tmp',         action = "store",      default = None,   dest = "TMP_DIR",   type = str,   required = False, metavar='TempPath',   help = 'Temporary folder')
@@ -209,37 +210,41 @@ def args_extraction(argv):
 
     args = vars(PARSER.parse_args(argv))
 
-    if args['DEBUG']:
-       logLevel = logging.DEBUG
+    if args['CONFIG_FILE']:
+        CONFIG_FILE = dict(args).get('CONFIG_FILE')
+        if os.path.isfile(CONFIG_FILE):
+            config_file_read()
+        else:
+            printHelp('No Valid Configuration File')
+        if 'DEBUG':
+           logLevel = logging.DEBUG
+        else:
+           logLevel = logging.INFO
     else:
-        logLevel = logging.INFO
-
-    if args['LOG_FILE']:
-        LOG_FILE = args['LOG_FILE']
-
-    log = log_setup(logLevel)
+        if args['DEBUG']:
+           logLevel = logging.DEBUG
+        else:
+            logLevel = logging.INFO
     
+        if args['LOG_FILE']:
+            LOG_FILE = args['LOG_FILE']
+
+        for key, value in dict(args).iteritems():
+            globals()[key] = value
+    
+    log = log_setup(logLevel)
+
+    for key, value in globals().iteritems():
+        if key.isupper():
+            log.debug('%s: %s' % (key, value))
+
     pid_file()
 
-    for key, value in dict(args).iteritems():
-        globals()[key] = value
-        log.debug('%s: %s' % (key, value))
-    
     check_parameters()
 
 
 def check_parameters():
     global EXTRA
-    global log
-
-    if CONFIG_FILE:
-        config_file_read()
-        if DEBUG == True:
-            logLevel = logging.DEBUG
-            log = log_setup(logLevel)
-        else:
-            logLevel = logging.INFO
-            log = log_setup(logLevel)
 
     if not T_HOST and MASK_DIR:
         printHelp('Cannot set Mask directory if Torrent Host is not defined')
@@ -286,9 +291,14 @@ def check_parameters():
 
 
 def printHelp(message=None):
-    PARSER.print_help()
+    print " "
     if message:
-        log.error(message)
+        if log:
+            log.error(message)
+            print "#####    "+message+"   #####"
+        else:
+            print "#####    " + message + "   #####"
+    print "See HELP for more information"
     sys.exit(1)
 
 
@@ -705,10 +715,11 @@ def remove_accents(old_path):
 
 
 def send_telegram_notification(msg):
-    log.debug('Send Telegram Notification: %s' % msg)
-    if not msg == None:
-        bot = telegram.Bot(token=TOKEN)
-        bot.sendMessage(chat_id=CHAT_ID, text=msg)
+    if TOKEN and CHAT_ID:
+        log.debug('Send Telegram Notification: %s' % msg)
+        if not msg == None:
+            bot = telegram.Bot(token=TOKEN)
+            bot.sendMessage(chat_id=CHAT_ID, text=msg)
 
 
 def main(argv):
@@ -722,29 +733,29 @@ def main(argv):
         args_extraction(argv)
         
         log.info("- - - - - - - - -   START MEDIA CONVERSION   - - - - - - - - -")
-        send_telegram_notification("start Conversion")
-    
+
         if not HANDBRAKE_PATH:
             log.error('HandBrakeCLI path not found, exiting')
             sys.exit(9)
-    
+
         if LANG:
-            LANG = [x.lower().strip() for x in LANG]
-    
+            LANG = LANG.lower().split()
+            # LANG = [x.lower().strip() for x in LANG]
+
         if FILE_PATH:
             fileList = scan_file()
-    
+
         if TXT_PATH:
             fileList = scan_txt()
-    
+
         if T_HOST:
             fileList = scan_torrents(fileList)
             cont = len(fileList)
-    
+
         if SRC_DIR:
             fileList = scan_path(fileList)
             log.info('Found %d video files during scan' % (len(fileList) - cont))
-    
+            
         log.info('%d total files in list for evaluating' % len(fileList))
     
         for item in fileList:
@@ -767,42 +778,45 @@ def main(argv):
             log.debug("Media is ISO File? %s" % item[1])
             if 'ISO' in mediaInfo['General']['Format']:
                 log.debug("Start Processing ISO file")
+                send_telegram_notification("start conversion %s" % item[1])
                 copy_transcode(this_FullPath)
                 continue
-            
+            else:
+                log.debug("No ISO File")
+
             log.debug("Media have Video in File? %s" % item[1])
             if 'Video' not in mediaInfo:
                 log.debug("Missing 'Video' tag in mediainfo for '%s'" % item[1])
                 continue
-    
+            else:
+                log.debug("Yes Media TAG Present")
+
             H = this_res = int(mediaInfo['Video']['Height'].replace(' ', '').replace('pixels', ''))
             W = int(mediaInfo['Video']['Width'].replace(' ', '').replace('pixels', ''))
-    
+
             log.debug('Video original resolution: %dx%d' % (W, H))
             log.debug('Video target resolution: %dx%d' % (RESOLUTIONS[MAX_RES]['X'], RESOLUTIONS[MAX_RES]['Y']))
-    
+
             log.debug("Media have the correct Resolution? %s" % item[1])
-            # if this_res > RESOLUTIONS[MAX_RES]['Y']:
-            if this_res > 0:
+            if this_res > RESOLUTIONS[MAX_RES]['Y']:
+            # if this_res > 0:
                 if 'Audio' in mediaInfo:
                     this_lang = get_video_lang(mediaInfo['Audio'])
                     utils['audio_naming'] = this_lang
     
                 if lang_exists(this_lang):
+                    send_telegram_notification("start conversion %s" % item[1])
                     copy_transcode(this_FullPath, utils)
-    
+
         log.info("- - - - - - - - -   END MEDIA CONVERSION   - - - - - - - - -")
-    
+
     except Exception as e:
         log.error(e.message, exc_info=True)
         log.error("%s")
-        
     finally:
         pidnumber = open(PID, 'r').read()
         if pidnumber == str(os.getpid()):
             os.remove(PID)
-    
-
 
 ########################################
 ########################################
