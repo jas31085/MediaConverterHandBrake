@@ -15,7 +15,7 @@ class ISO9660IOError(IOError):
         self.path = path
 
     def __str__(self):
-        return "Path not found: %s" % self.path
+        return 'Path not found: %s' % self.path
 
 
 class ISO9660(object):
@@ -81,7 +81,7 @@ class ISO9660(object):
             yield i
 
     def _tree_path(self, name, index):
-        spacer = lambda s: "%s/%s" % (name, s)
+        spacer = lambda s: '%s/%s' % (name, s)
         for i, c in enumerate(self._paths):
             if c['parent'] == index and i != 0:
                 yield spacer(c['name'])
@@ -89,7 +89,7 @@ class ISO9660(object):
                     yield d
 
     def _tree_node(self, node):
-        spacer = lambda s: "%s/%s" % (node['name'], s)
+        spacer = lambda s: '%s/%s' % (node['name'], s)
         for c in list(self._unpack_dir_children(node)):
             yield spacer(c['name'])
             if c['flags'] & 2:
@@ -127,7 +127,7 @@ class ISO9660(object):
             self._buff.close()
         opener = urllib.FancyURLopener()
         opener.http_error_206 = lambda *a, **k: None
-        opener.addheader("Range", "bytes=%d-%d" % (start, start + length - 1))
+        opener.addheader('Range', 'bytes=%d-%d' % (start, start + length - 1))
         self._buff = opener.open(self._url)
 
     def _get_sector_file(self, sector, length):
@@ -311,7 +311,7 @@ if __name__ == '__main__':
     import sys
 
     if len(sys.argv) < 2:
-        print "usage: python iso9660.py isourl [path]"
+        print 'usage: python iso9660.py isourl [path]'
     else:
         iso_path = sys.argv[1]
         ret_path = sys.argv[2] if len(sys.argv) > 2 else None
