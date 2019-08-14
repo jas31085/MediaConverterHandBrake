@@ -31,7 +31,7 @@ class Session(object):
     def __str__(self):
         text = ''
         for key in sorted(self._fields.keys()):
-            text += "% 32s: %s\n" % (key[-32:], self._fields[key].value)
+            text += '% 32s: %s\n' % (key[-32:], self._fields[key].value)
         return text
 
     def _update_fields(self, other):
@@ -92,9 +92,9 @@ class Session(object):
             self._fields['peer_port'] = Field(port, True)
             self._push()
         else:
-            raise ValueError("Not a valid limit")
+            raise ValueError('Not a valid limit')
 
-    peer_port = property(_get_peer_port, _set_peer_port, None, "Peer port. This is a mutator.")
+    peer_port = property(_get_peer_port, _set_peer_port, None, 'Peer port. This is a mutator.')
 
     def _get_pex_enabled(self):
         """Is peer exchange enabled?"""
