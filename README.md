@@ -1,7 +1,7 @@
 # MediaConverterHandBrake
 ----------------
 <br>
-I use Handbrake-cli to reduce my movi library,<br>
+I use Handbracke-cli to reduce my movi library,<br>
 <br>
 this is the default preset for my script conversion
 <br>

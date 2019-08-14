@@ -6,11 +6,11 @@ See README for more information.
 Usage:
 
 >>> import magic
->>> magic.from_file('testdata/test.pdf')
+>>> magic.from_file("testdata/test.pdf")
 'PDF document, version 1.2'
->>> magic.from_file('testdata/test.pdf', mime=True)
+>>> magic.from_file("testdata/test.pdf", mime=True)
 'application/pdf'
->>> magic.from_buffer(open('testdata/test.pdf').read(1024))
+>>> magic.from_buffer(open("testdata/test.pdf").read(1024))
 'PDF document, version 1.2'
 >>>
 
@@ -95,7 +95,7 @@ class Magic:
         # mimetype of a file and returns null from magic_file (and
         # likely _buffer), but also does not return an error message.
         if e.message is None and (self.flags & MAGIC_MIME):
-            return 'application/octet-stream'
+            return "application/octet-stream"
         else:
             raise e
 
@@ -131,7 +131,7 @@ def from_file(filename, mime=False):
     value is the mimetype if mime=True, otherwise a human readable
     name.
 
-    >>> magic.from_file('testdata/test.pdf', mime=True)
+    >>> magic.from_file("testdata/test.pdf", mime=True)
     'application/pdf'
     """
     m = _get_magic_type(mime)
@@ -144,7 +144,7 @@ def from_buffer(buffer, mime=False):
     value is the mimetype if mime=True, otherwise a human readable
     name.
 
-    >>> magic.from_buffer(open('testdata/test.pdf').read(1024))
+    >>> magic.from_buffer(open("testdata/test.pdf").read(1024))
     'PDF document, version 1.2'
     """
     m = _get_magic_type(mime)
