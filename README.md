@@ -1,5 +1,11 @@
 # MediaConverterHandBrake
 ----------------
+Requiremets python
+python-telegram-bot
+configparser
+Requirements debian 
+mediainfo
+
 <br>
 I use Handbrake-cli to reduce my movi library,<br>
 <br>
